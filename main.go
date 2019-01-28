@@ -154,7 +154,9 @@ func mainCommand(c cli.Command) {
 			}
 
 			if cfg != nil {
+				mut.Lock()
 				identity, err = cfg.Get(host, "IdentityFile")
+				mut.Unlock()
 
 				if err != nil {
 					errs <- err
