@@ -40,6 +40,10 @@ A human readable string that specifies the alias for the cluster machines.
 The user to connect to the machine as, if not specified then `$USER` will be
 used instead.
 
+**[host]**
+
+The host to connect to, this is always required.
+
 **[port]**
 
 The port to connect to on the machine, if not specified then `22` will be used
