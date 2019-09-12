@@ -21,7 +21,7 @@ uat:
 
 ## The ClFile
 
-The `ClFile` expects the cluster of servers to be organised in the above format,
+The `ClFile` expects the cluster of servers to be organised in the below format,
 where the heading is the name that will be used via the command, and each
 subsequent entry is the server to connect to.
 
