@@ -8,7 +8,7 @@ to run the command across, followed by the command to run like so.
 $ cl uat systemctl status postgresql
 ```
 
-cl reads expects a `ClFile` to be in the current directory from where the
+cl expects a `ClFile` to be in the current directory from where the
 command is invoked. This is a plain-text file that describes the cluster, and
 how they can be accessed via SSH.
 
