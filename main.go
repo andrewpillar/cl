@@ -194,9 +194,7 @@ func main() {
 				return
 			}
 
-			s := fmt.Sprintf("Host: %s\n", h.addr)
-
-			out <- append([]byte(s), b...)
+			out <- append([]byte("Host: " + h.addr + "\n"), b...)
 		}(h, cmd)
 	}
 
