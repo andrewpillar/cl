@@ -3,19 +3,30 @@ package main
 import (
 	"bufio"
 	"bytes"
+	"context"
 	"fmt"
 	"io"
 	"io/ioutil"
 	"net"
 	"os"
+	"os/signal"
 	"path/filepath"
 	"strings"
 	"sync"
+	"syscall"
+	"time"
 
 	"golang.org/x/crypto/ssh"
 )
 
-var argv0 string
+var (
+	argv0 string
+
+	codes map[os.Signal]int = map[os.Signal]int{
+		syscall.SIGINT:  130,
+		syscall.SIGKILL: 137,
+	}
+)
 
 type host struct {
 	user     string
@@ -108,6 +119,7 @@ func run(h host, cmd string) ([]byte, error) {
 			ssh.PublicKeys(signer),
 		},
 		HostKeyCallback: ssh.InsecureIgnoreHostKey(),
+		Timeout:         time.Duration(time.Second * 60),
 	}
 
 	conn, err := ssh.Dial("tcp", h.addr, cfg)
@@ -140,7 +152,7 @@ func run(h host, cmd string) ([]byte, error) {
 func main() {
 	argv0 = os.Args[0]
 
-	if len(os.Args) < 2 {
+	if len(os.Args) < 3 {
 		fmt.Fprintf(os.Stderr, "usage: cl [cluster] [commands...]\n")
 		os.Exit(1)
 	}
@@ -179,22 +191,29 @@ func main() {
 
 			if err != nil {
 				errs <- err
+				return
 			}
 
-			hname, port, _ := net.SplitHostPort(h.addr)
-
-			s := fmt.Sprintf(
-				"ssh -i %s -p %s -l %s %s %s\n",
-				h.identity,
-				port,
-				h.user,
-				hname,
-				cmd,
-			)
+			s := fmt.Sprintf("Host: %s\n", h.addr)
 
 			out <- append([]byte(s), b...)
 		}(h, cmd)
 	}
+
+	c, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	sigs := make(chan os.Signal)
+
+	signal.Notify(sigs, syscall.SIGINT, syscall.SIGKILL)
+
+	code := 0
+
+	go func() {
+		sig := <-sigs
+		cancel()
+		code = codes[sig]
+	}()
 
 	go func() {
 		wg.Wait()
@@ -203,10 +222,13 @@ func main() {
 		close(out)
 	}()
 
-	code := 0
-
 	for errs != nil && out != nil {
 		select {
+		case <-c.Done():
+			fmt.Fprintf(os.Stderr, "%s: %s\n", argv0, c.Err())
+			err = nil
+			out = nil
+			break
 		case err, ok := <-errs:
 			if !ok {
 				errs = nil
