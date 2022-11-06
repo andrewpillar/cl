@@ -16,6 +16,7 @@ uat:
     uat1.example.com ~/.ssh/id_rsa
     uat2.example.com ~/.ssh/id_rsa
 
+# Comment line, this is ignored.
 mixed:
 	mixed0.example.com
 	    mixed1.example.com:444
