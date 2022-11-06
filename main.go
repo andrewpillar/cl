@@ -6,26 +6,15 @@ import (
 	"context"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"net"
 	"os"
 	"os/signal"
 	"path/filepath"
 	"strings"
 	"sync"
-	"syscall"
 	"time"
 
 	"golang.org/x/crypto/ssh"
-)
-
-var (
-	argv0 string
-
-	codes map[os.Signal]int = map[os.Signal]int{
-		syscall.SIGINT:  130,
-		syscall.SIGKILL: 137,
-	}
 )
 
 type host struct {
@@ -34,28 +23,39 @@ type host struct {
 	identity string
 }
 
-func unmarshal(r io.Reader) map[string][]host {
+func parseClFile(r io.Reader) map[string][]host {
 	s := bufio.NewScanner(r)
 	m := make(map[string][]host)
 
 	curr := ""
 
 	for s.Scan() {
-		line := strings.TrimSpace(s.Text())
+		line := s.Text()
 
-		if line == "" {
+		if line == "" || line[0] == '#' {
 			continue
 		}
 
-		end := len(line) - 1
+		end := len(line)-1
 
 		if line[end] == ':' {
 			curr = line[:end]
 			continue
 		}
 
+		pos := 0
+
+		for i, r := range line {
+			if r != ' ' && r != '\t' {
+				pos = i
+				break
+			}
+		}
+
+		line = line[pos:]
+
 		h := host{
-			user:     os.Getenv("USER"),
+			user:     os.Getenv("user"),
 			identity: filepath.Join(os.Getenv("HOME"), ".ssh", "id_rsa"),
 		}
 
@@ -96,21 +96,20 @@ func unmarshal(r io.Reader) map[string][]host {
 
 		m[curr] = append(m[curr], h)
 	}
-
 	return m
 }
 
 func run(h host, cmd string) ([]byte, error) {
-	key, err := ioutil.ReadFile(h.identity)
+	key, err := os.ReadFile(h.identity)
 
 	if err != nil {
-		return []byte{}, err
+		return nil, err
 	}
 
 	signer, err := ssh.ParsePrivateKey(key)
 
 	if err != nil {
-		return []byte{}, err
+		return nil, err
 	}
 
 	cfg := &ssh.ClientConfig{
@@ -125,7 +124,7 @@ func run(h host, cmd string) ([]byte, error) {
 	conn, err := ssh.Dial("tcp", h.addr, cfg)
 
 	if err != nil {
-		return []byte{}, err
+		return nil, err
 	}
 
 	defer conn.Close()
@@ -133,7 +132,7 @@ func run(h host, cmd string) ([]byte, error) {
 	sess, err := conn.NewSession()
 
 	if err != nil {
-		return []byte{}, err
+		return nil, err
 	}
 
 	defer sess.Close()
@@ -145,15 +144,14 @@ func run(h host, cmd string) ([]byte, error) {
 			return b, err
 		}
 	}
-
 	return b, nil
 }
 
 func main() {
-	argv0 = os.Args[0]
+	argv0 := os.Args[0]
 
 	if len(os.Args) < 3 {
-		fmt.Fprintf(os.Stderr, "usage: cl [cluster] [commands...]\n")
+		fmt.Fprintf(os.Stderr, "usage: %s <cluster> <commands...>\n", argv0)
 		os.Exit(1)
 	}
 
@@ -166,7 +164,7 @@ func main() {
 
 	defer f.Close()
 
-	cluster := unmarshal(f)
+	cluster := parseClFile(f)
 
 	hosts, ok := cluster[os.Args[1]]
 
@@ -175,7 +173,8 @@ func main() {
 		os.Exit(1)
 	}
 
-	wg := &sync.WaitGroup{}
+	var wg sync.WaitGroup
+
 	cmd := strings.Join(os.Args[2:], " ")
 
 	errs := make(chan error)
@@ -198,19 +197,15 @@ func main() {
 		}(h, cmd)
 	}
 
-	c, cancel := context.WithCancel(context.Background())
+	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	sigs := make(chan os.Signal)
-
-	signal.Notify(sigs, syscall.SIGINT, syscall.SIGKILL)
-
-	code := 0
+	ch := make(chan os.Signal, 1)
+	signal.Notify(ch, os.Interrupt)
 
 	go func() {
-		sig := <-sigs
+		<-ch
 		cancel()
-		code = codes[sig]
 	}()
 
 	go func() {
@@ -220,10 +215,13 @@ func main() {
 		close(out)
 	}()
 
+	line := make([]byte, 0)
+	code := 0
+
 	for errs != nil && out != nil {
 		select {
-		case <-c.Done():
-			fmt.Fprintf(os.Stderr, "%s: %s\n", argv0, c.Err())
+		case <-ctx.Done():
+			fmt.Fprintf(os.Stderr, "%s: %s\n", argv0, ctx.Err())
 			err = nil
 			out = nil
 			break
@@ -247,18 +245,18 @@ func main() {
 
 			os.Stderr.Write(p[:i])
 
-			line := make([]byte, 0)
-
 			for _, b := range p[i:] {
 				line = append(line, b)
 
 				if b == '\n' {
 					os.Stdout.Write(append([]byte("  "), line...))
-					line = make([]byte, 0)
+					line = line[0:0]
 				}
 			}
 		}
 	}
 
-	os.Exit(code)
+	if code != 0 {
+		os.Exit(code)
+	}
 }
