@@ -55,7 +55,7 @@ func parseClFile(r io.Reader) map[string][]host {
 		line = line[pos:]
 
 		h := host{
-			user:     os.Getenv("user"),
+			user:     os.Getenv("USER"),
 			identity: filepath.Join(os.Getenv("HOME"), ".ssh", "id_rsa"),
 		}
 
