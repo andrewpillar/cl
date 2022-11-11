@@ -12,16 +12,16 @@ prod:
 	prod1.example.com ~/.ssh/id_ed25519
 	prod2.example.com ~/.ssh/id_ed25519
 uat:
-    uat0.example.com ~/.ssh/id_rsa
-    uat1.example.com ~/.ssh/id_rsa
-    uat2.example.com ~/.ssh/id_rsa
+    uat0.example.com 	~/.ssh/id_rsa
+    uat1.example.com 	  	~/.ssh/id_rsa
+    uat2.example.com   	~/.ssh/id_rsa
 
 # Comment line, this is ignored.
 mixed:
 	mixed0.example.com
 	    mixed1.example.com:444
   mixed2.example.com
-                  		 	 	    mixed3.example.com ~/.ssh/id_ed25519
+                  		 	 	    mixed3.example.com 		 	 	   ~/.ssh/id_ed25519
 `
 
 	envs := parseClFile(strings.NewReader(clfile))

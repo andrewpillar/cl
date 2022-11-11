@@ -64,7 +64,7 @@ func parseClFile(r io.Reader) map[string][]host {
 		}
 
 		if strings.Contains(line, " ") {
-			parts := strings.Split(line, " ")
+			parts := strings.Fields(line)
 
 			h.identity = parts[1]
 
